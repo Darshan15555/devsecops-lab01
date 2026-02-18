@@ -1,28 +1,64 @@
-name: Python CI Pipeline
+name: Weather App Production Check
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x]
     steps:
-      - name: Checkout Repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set Up Python
-        uses: actions/setup-python@v5
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: ${{ matrix.node-version }}
 
-      - name: Display Python Version
-        run: python --version
+      - name: Install dependencies
+        run: npm install
 
-      - name: Run Tests
-        run: python test_calc.py
+      - name: Run Unit Tests
+        run: node test.js
+
+      - name: Run Security Check
+        env:
+          WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+        run: node app.js
+
+  package:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Build Artifact
+        run: zip -r weather-app-dist.zip . -x "*.git*"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-app-dist
+          path: weather-app-dist.zip
+
+  # optional: example of how a deploy job would download the artifact
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: weather-app-dist
+          path: ./dist
+
+      - name: Show artifact contents
+        run: ls -la ./dist
